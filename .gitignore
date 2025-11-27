@@ -1,0 +1,37 @@
+# Raw data (too large for git)
+raw/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Output data - INCLUDED (final results for thesis)
+
+# Processed data (can be regenerated)
+processed/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Large files (in raw/processed only)
+*.tif
+*.tiff
+*.parquet
+
