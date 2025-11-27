@@ -1,89 +1,109 @@
 # EWRI: Enhanced Wildfire Risk Index
-### A Multi-Modal Approach to Wildfire Risk Assessment Using Foundation Model Embeddings
 
-**Author:** Dev Sharma  
-**Project Type:** Master's Thesis Research  
-**Status:** Active Development
+A wildfire risk assessment framework that compares **traditional satellite features** against **Google AlphaEarth foundation model embeddings** to predict fire-prone areas.
 
----
-
-## Abstract
-
-This repository implements a novel wildfire risk assessment framework that integrates Google's AlphaEarth Foundation Model embeddings with traditional remote sensing features and socio-economic vulnerability indicators. The key innovation is using pre-trained satellite embeddings as a high-dimensional representation of landscape characteristics, which are then compared against "fire signatures" derived from historically burned areas using cosine similarity.
+**Author:** Dev Sharma | **Institution:** NYIT | **Status:** Master's Thesis
 
 ---
 
-## Research Question
+## What This Does
 
-**Can foundation model embeddings from satellite imagery improve wildfire hazard prediction compared to traditional satellite-derived features (NDVI, LST, fuel type, terrain)?**
+1. Extracts environmental features from satellite imagery for 4 US counties
+2. Creates a "fire signature" from historically burned areas
+3. Scores every location by similarity to that signature
+4. Compares traditional satellite features vs. AI embeddings
 
-Secondary questions:
-- How does the integration of socio-economic vulnerability (FEMA SOVI, population, building density) affect risk prediction accuracy?
-- Do embeddings generalize across different fire regimes (WUI fires vs. wilderness fires)?
+**Key Finding:** Embeddings improve hazard prediction by **+19% AUC** on average.
 
 ---
 
-## Methodology
+## Results
 
-### 1. Data Acquisition & Preprocessing
+| County | Fire Rate | AUC (Satellite) | AUC (Embeddings) | Improvement |
+|--------|-----------|-----------------|------------------|-------------|
+| Los Angeles | 2.4% | 0.87 | **0.91** | +5% |
+| Napa | 2.2% | 0.68 | **0.82** | +20% |
+| Suffolk | 2.3% | 0.65 | **0.77** | +19% |
+| Maricopa | 1.8% | 0.69 | **0.93** | +34% |
+| **Average** | | 0.72 | **0.86** | **+19%** |
 
-All geospatial data is converted to Uber's H3 hexagonal grid at resolution 9 (~174m edge length) for consistent spatial analysis.
+---
 
-| Data Source | Variables | Resolution | Temporal Coverage |
-|-------------|-----------|------------|-------------------|
-| Google AlphaEarth | 64-dim embeddings/year | 100m | 2017-2024 (8 years) |
-| MODIS/Landsat | NDVI, EVI, LST | 250m-1km | 2017-2019 |
-| SRTM/ASTER | Elevation, Slope, Aspect, Hillshade | 30m | Static |
-| LANDFIRE | Fuel Type, Land Cover | 30m | Static |
-| WorldPop | Population density | 100m | 2017-2019 |
-| Google Open Buildings | Building footprints | Vector | 2020 |
-| FEMA NRI | Social Vulnerability Index (SOVI) | Census Tract | 2020 |
-| NIFC | Fire perimeters (validation) | Vector | 2020 |
+## Data Sources
 
-### 2. Hazard Score Calculation
+### Satellite Features (13 total)
 
-The hazard score quantifies similarity between any location and historically burned areas:
+**Static Features (4)** — Same for all years
 
-```
-fire_signature = mean(embeddings[burned_hexagons])
-hazard_score = cosine_similarity(hexagon_embedding, fire_signature)
-```
+| Feature | Source | Dataset | Resolution |
+|---------|--------|---------|------------|
+| Elevation | SRTM | `USGS/SRTMGL1_003` | 30m |
+| Slope | SRTM derived | `ee.Terrain.slope()` | 30m |
+| Aspect | SRTM derived | `ee.Terrain.aspect()` | 30m |
+| Hillshade | SRTM derived | `ee.Terrain.hillshade()` | 30m |
 
-Two hazard variants are computed:
-- **hazard_baseline**: Using traditional satellite features (31 variables)
-- **hazard_enhanced**: Using AlphaEarth embeddings (192 features for pre-fire years)
+**Dynamic Features (9)** — Collected for 2017, 2018, 2019
 
-### 3. Vulnerability Index
+| Feature | Source | Dataset | Resolution |
+|---------|--------|---------|------------|
+| NDVI | Landsat 8 | `LANDSAT/LC08/C02/T1_L2` | 30m |
+| EVI | Landsat 8 | `LANDSAT/LC08/C02/T1_L2` | 30m |
+| LST | MODIS Terra | `MODIS/006/MOD11A1` | 1km |
+| Soil Moisture | SMAP | `NASA/SMAP/SPL3SMP_E/005` | 9km |
+| Humidity | PRISM | `OREGONSTATE/PRISM/AN81d` | 800m |
+| Wind Speed | ERA5-Land | `ECMWF/ERA5_LAND/DAILY_AGGR` | 9km |
+| Precipitation | PRISM | `OREGONSTATE/PRISM/AN81d` | 800m |
+| Fuel Type | MODIS | `MODIS/006/MCD12Q1` (LC_Type1) | 500m |
+| Land Cover | MODIS | `MODIS/006/MCD12Q1` (LC_Type5) | 500m |
 
-Vulnerability combines exposure (who/what is at risk) with social vulnerability:
+### Vulnerability Data
 
-```
-vulnerability = 0.45 × population_norm + 0.45 × building_norm + 0.10 × sovi_norm
-```
+| Feature | Source | Dataset | Resolution |
+|---------|--------|---------|------------|
+| Population | WorldPop | `WorldPop/GP/100m/pop` | 100m |
+| Built-Up Area | GHSL | `JRC/GHSL/P2016/BUILT_LDSMT_GLOBE_V1` | 38m |
+| Social Vulnerability | FEMA NRI | National Risk Index CSV | Census Tract |
 
-Weights are calibrated to minimize blockiness from tract-level SOVI data while preserving high-resolution population/building information.
+### AlphaEarth Embeddings
 
-### 4. Risk Index (EWRI)
+| Feature | Source | Resolution | Dimensions |
+|---------|--------|------------|------------|
+| Satellite Embeddings | Google AlphaEarth | 100m | 64 per year × 8 years = 512 |
 
-```
-EWRI = hazard_enhanced × vulnerability
-```
+### External Data
 
-### 5. Validation
-
-- **Metric**: AUC-ROC against binary burned/unburned labels
-- **Fire capture rate**: % of actual fires in top 10/20/30% risk areas
+| Data | Source | Format |
+|------|--------|--------|
+| Fire Perimeters | NIFC / CAL FIRE | Shapefile |
+| Census Tracts | TIGER/Line | Shapefile |
 
 ---
 
 ## Study Areas
 
-| County | State | Fire Event | Hexagons | Fire Type |
-|--------|-------|------------|----------|-----------|
-| Los Angeles | CA | Bobcat Fire 2020 | 171,414 | WUI |
-| Napa | CA | Glass Fire 2020 | 19,307 | WUI |
-| Suffolk | NY | Pine Barrens 2020 | 58,587 | Wildland |
-| Maricopa | AZ | Bush Fire 2020 | 197,573 | Wildland |
+| County | State | Hexagons | Validation Fire |
+|--------|-------|----------|-----------------|
+| Los Angeles | CA | 171,414 | Bobcat Fire 2020 |
+| Napa | CA | 19,307 | Glass Fire 2020 |
+| Suffolk | NY | 58,587 | Pine Barrens 2020 |
+| Maricopa | AZ | 197,573 | Bush Fire 2020 |
+
+---
+
+## How It Works
+
+```
+1. Convert all data to H3 hexagons (resolution 9, ~174m)
+2. Label hexagons inside fire perimeter as "burned"
+3. Create fire signature = average features of burned hexagons
+4. Hazard score = cosine similarity to fire signature
+5. Risk = Hazard × Vulnerability
+```
+
+**Vulnerability Formula:**
+```
+vulnerability = 0.45×population + 0.45×buildings + 0.10×SOVI
+```
 
 ---
 
@@ -91,112 +111,52 @@ EWRI = hazard_enhanced × vulnerability
 
 ```
 EWRI/
-├── raw/{county}/                    # Raw input data
-│   ├── satellite_data/              # GeoTIFF rasters (NDVI, LST, terrain)
-│   ├── embeddings_data/             # AlphaEarth 512-band TIFs
-│   ├── Vulnerability/               # Population & BuiltUp TIFs
-│   ├── fema_data/                   # FEMA NRI CSV + metadata
-│   ├── fire_data/                   # Fire perimeter shapefiles
-│   └── census_tracts/               # TIGER/Line shapefiles
-│
-├── processed/{county}/              # H3-indexed parquet files
-│   ├── satellite_h3.parquet         # 31 satellite features
-│   ├── embeddings_h3.parquet        # 64 features × 8 years = 512 (192 used for pre-fire)
-│   ├── fema_h3.parquet              # SOVI scores by hexagon
-│   └── exposure_h3.parquet          # Population + buildings
-│
-├── outputs/{county}/                # Final results
-│   └── {county}_EWRI_final.csv
-│
-└── src/                             # Processing notebooks
-    ├── h3_conversion.ipynb          # Satellite, FEMA, Exposure → H3
-    ├── embeddings_conversion.ipynb  # AlphaEarth TIF → H3 (chunked)
-    └── EWRI_risk_calculation.ipynb  # Risk calculation & validation
+├── src/
+│   ├── h3_conversion.ipynb         # Satellite + FEMA + Exposure → H3
+│   ├── embeddings_conversion.ipynb # AlphaEarth TIF → H3
+│   └── EWRI_risk_calculation.ipynb # Risk scores + validation
+├── outputs/
+│   └── {county}/{county}_EWRI_final.csv
+└── README.md
 ```
 
 ---
 
-## Running the Pipeline
-
-### Prerequisites
+## Quick Start
 
 ```bash
+# 1. Install dependencies
 pip install pandas geopandas numpy h3 rasterio scikit-learn tqdm shapely
+
+# 2. Set COUNTY variable in each notebook
+COUNTY = "los_angeles"  # or napa, suffolk, maricopa
+
+# 3. Run notebooks in order
+h3_conversion.ipynb → embeddings_conversion.ipynb → EWRI_risk_calculation.ipynb
 ```
 
-### Step 1: Convert Raw Data to H3
-
-```bash
-# Set COUNTY variable in each notebook, then run all cells
-
-# Satellite, FEMA, and Exposure data
-jupyter notebook src/h3_conversion.ipynb
-
-# AlphaEarth embeddings (memory-intensive, uses chunked processing)
-jupyter notebook src/embeddings_conversion.ipynb
-```
-
-### Step 2: Calculate Risk Scores
-
-```bash
-jupyter notebook src/EWRI_risk_calculation.ipynb
-```
-
-**County Options:** `los_angeles`, `napa`, `suffolk`, `maricopa`
-
 ---
 
-## Output Schema
+## Output Format
 
-| Column | Type | Description |
-|--------|------|-------------|
-| `h3_index` | string | H3 hexagon identifier (resolution 9) |
-| `hazard_baseline` | float | Cosine similarity using satellite features |
-| `hazard_enhanced` | float | Cosine similarity using embeddings |
-| `vulnerability` | float | Normalized vulnerability score (0-1) |
-| `risk_baseline` | float | hazard_baseline × vulnerability |
-| `risk_enhanced` | float | **EWRI score** (hazard_enhanced × vulnerability) |
-| `risk_category` | string | Percentile-based: Low/Moderate/High/Very High |
-| `burned` | int | Ground truth label (1=burned, 0=unburned) |
+Each county produces a CSV with these columns:
 
----
-
-## Preliminary Results
-
-| County | Hazard AUC (Satellite) | Hazard AUC (Embeddings) | Improvement |
-|--------|------------------------|-------------------------|-------------|
-| Napa | 0.68 | 0.82 | +20% |
-| Maricopa | 0.69 | 0.93 | +35% |
-
-### Key Finding
-
-**Embeddings consistently outperform traditional satellite features.** The AlphaEarth foundation model embeddings capture fire-prone environmental patterns more effectively than manually curated satellite indices (NDVI, LST, fuel type). Maricopa (wilderness fire) showed the largest improvement (+35%), suggesting embeddings excel at capturing subtle landscape characteristics in natural areas.
-
-*Note: Risk AUC depends on correlation between vulnerability and fire occurrence. In areas where fires occur in low-population wilderness, multiplying by vulnerability reduces predictive accuracy.*
-
----
-
-## Known Limitations
-
-1. **Temporal mismatch**: Pre-2020 embeddings used to predict 2020 fires
-2. **Vulnerability paradox**: High vulnerability areas may have low fire occurrence (urban cores)
-3. **Fire signature generalization**: Single fire event may not represent all fire types
-4. **SOVI resolution**: Census tract-level data introduces blockiness
-
----
-
-## References
-
-- **AlphaEarth**: Google Research (2024). Foundation Models for Earth Observation.
-- **H3**: Uber Technologies. Hexagonal Hierarchical Spatial Index.
-- **FEMA NRI**: Federal Emergency Management Agency. National Risk Index Technical Documentation.
-- **WorldPop**: Tatem, A.J. (2017). WorldPop, open data for spatial demography.
+| Column | Description |
+|--------|-------------|
+| `h3_index` | H3 hexagon ID (resolution 9) |
+| `hazard_baseline` | Satellite-based hazard score |
+| `hazard_enhanced` | Embeddings-based hazard score |
+| `vulnerability` | Normalized vulnerability (0-1) |
+| `risk_baseline` | hazard_baseline × vulnerability |
+| `risk_enhanced` | **EWRI score** (main output) |
+| `risk_category` | Low / Moderate / High / Very High |
+| `burned` | Ground truth (1 = burned, 0 = not) |
 
 ---
 
 ## Contact
 
-For questions regarding this codebase or collaboration inquiries, please contact the author.
+Dev Sharma — dsharm25@nyit.edu
 
 ---
 
